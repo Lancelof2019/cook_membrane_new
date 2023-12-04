@@ -2857,114 +2857,70 @@ struct Problem {
 	    x0=mu_vec;
 	}
 	 
-/*	{
-	double *mu_vec_ptr=x0.data();
-	   solid_3d.run(mu_vec_ptr);
-	   Eigen::SparseMatrix<double> eigen_tangent_matrix(solid_3d.tangent_matrix.m(), solid_3d.tangent_matrix.n());
-          #pragma omp parallel for
-          for (unsigned int i = 0; i < solid_3d.tangent_matrix.n(); ++i) {
-            for (dealii::BlockSparseMatrix<double>::const_iterator it = solid_3d.tangent_matrix.begin(i);
-              it !=solid_3d.tangent_matrix.end(i); ++it) {
-              eigen_tangent_matrix.insert(it->row(), it->column()) = it->value();
-           }
-          }
-          Eigen::MatrixXd dense_matrix = eigen_tangent_matrix.toDense();
-          Eigen::MatrixXd inv_dense_matrix = dense_matrix.inverse();
-
-	 Eigen::MatrixXd solver_vector(solid_3d.solution_n.size(),1);
-         Eigen::VectorXd obj_det(solid_3d.solution_n.size());
-
-
-	 double norm2_value;
-
-	  for (unsigned int i = 0; i < solid_3d.solution_n.size(); ++i) {
-             solver_vector(i) = solid_3d.solution_n[i];
-	     obj_det(i)= solid_3d.solution_n[i];
-	     norm2_value+=std::pow(solid_3d.solution_n[i],2);
-         }
-
-         norm2_value=std::sqrt(norm2_value);
 
 
 
-         Eigen::VectorXd solver_gradient=-1*(obj_det/norm2_value).transpose()*inv_dense_matrix*solver_vector*solver_vector.transpose()*100;
-
-//	 std::cout<<solver_gradient<<std::endl;
-
-	  Eigen::VectorXd cell_gradients_solid(solid_3d.triangulation.n_active_cells());
-          dealii::FE_Q<dim> fe_tmp(parameters.poly_degree);
-          const dealii::QGauss<dim> qf_cell(parameters.quad_order);
-          const dealii::UpdateFlags uf_cell(dealii::update_gradients | dealii::update_JxW_values);
-          dealii::FEValues<dim> fe_values_ref_tmp(fe_tmp, qf_cell, uf_cell);
-          unsigned int cell_index_solid = 0;
-          double dof_value = 0;
-          double gradient_tmp = 0;
-          for (auto cell = solid_3d.dof_handler_ref.begin_active(); cell != solid_3d.dof_handler_ref.end(); ++cell) {
-            if (cell->is_locally_owned()) {
-                fe_values_ref_tmp.reinit(cell);
-
-        // 获取 DoF 指标
-                std::vector<dealii::types::global_dof_index> local_dof_indices(solid_3d.dofs_per_cell) ;
-
-                cell->get_dof_indices(local_dof_indices);
-        // 创建用于存储单元梯度的向量
-       // Eigen::VectorXd gradient(Eigen::VectorXd::Zero(local_dof_indices.size()));
-        //std::cout<<"*****************************************"<<std::endl;
-             for (unsigned int i = 0; i < local_dof_indices.size(); ++i) {
-            // 获取当前自由度的全局索引
-                dealii::types::global_dof_index global_index = local_dof_indices[i];
-
-            // 根据全局索引从 solver_gradient 中获取对应的值
-                dof_value = solver_gradient(global_index);
-
-
-                gradient_tmp += dof_value;
-                dof_value=0;
-
-             }
-
-           cell_gradients_solid(cell_index_solid) = gradient_tmp;
-           gradient_tmp=0;
-           ++cell_index_solid;
-          }
-       }
-        std::cout<<cell_gradients_solid<<std::endl; 
-    }
-*/
-
-
-     	void Obj(Cook_Membrane::Solid<dim,NumberType> &solid_3d,Cook_Membrane::Parameters::AllParameters &parameters, double *x, double *f0x, double *fx) {
+   	void Obj(Cook_Membrane::Solid<dim,NumberType> &solid_3d,Cook_Membrane::Parameters::AllParameters &parameters, double *x, double *f0x, double *fx) {
 	
 	   
 	  // double *mu_vec_ptr=x.data();
            solid_3d.run(x);
            Eigen::SparseMatrix<double> eigen_tangent_matrix(solid_3d.tangent_matrix.m(), solid_3d.tangent_matrix.n());
-          #pragma omp parallel for
-          for (unsigned int i = 0; i < solid_3d.tangent_matrix.n(); ++i) {
-            for (dealii::BlockSparseMatrix<double>::const_iterator it = solid_3d.tangent_matrix.begin(i);
-              it !=solid_3d.tangent_matrix.end(i); ++it) {
-              eigen_tangent_matrix.insert(it->row(), it->column()) = it->value();
+           for (unsigned int i = 0; i < solid_3d.tangent_matrix.n(); ++i) {
+             for (dealii::BlockSparseMatrix<double>::const_iterator it = solid_3d.tangent_matrix.begin(i);
+                 it !=solid_3d.tangent_matrix.end(i); ++it) {
+                 eigen_tangent_matrix.insert(it->row(), it->column()) = it->value();
+             }
            }
-          }
           Eigen::MatrixXd dense_matrix = eigen_tangent_matrix.toDense();
-          Eigen::MatrixXd inv_dense_matrix = dense_matrix.inverse();
+          // dealii::DoFHandler<dim>::active_cell_iterator component_cell;
+	  //dealii::DoFHandler<dim>::active_cell_iterator component_cell1;
+	  //dealii::DoFHandler<dim>::active_cell_iterator component_cell2;
+
+          int n_cells = solid_3d.triangulation.n_active_cells();
+
+          Eigen::MatrixXd cell_contributions = Eigen::MatrixXd::Zero(n_cells, n_cells);
+
+         for (auto cell = solid_3d.dof_handler_ref.begin_active(); cell != solid_3d.dof_handler_ref.end(); ++cell) {
+                std::vector<dealii::types::global_dof_index> local_dof_indices(solid_3d.dofs_per_cell) ;
+                cell->get_dof_indices(local_dof_indices);
+                const unsigned int cell_index = cell->active_cell_index();
+			
+            for (unsigned int i = 0; i < local_dof_indices.size(); ++i) {
+                dealii::types::global_dof_index row_global_index = local_dof_indices[i];
+				///////////////////////////////////////////////////////////////////////////////////
+		  for (auto tmp_cell = solid_3d.dof_handler_ref.begin_active(); tmp_cell != solid_3d.dof_handler_ref.end(); ++tmp_cell) {
+                           std::vector<dealii::types::global_dof_index> tmp_local_dof_indices(solid_3d.dofs_per_cell) ;
+                           const unsigned int neighbor_index = tmp_cell->active_cell_index();
+                           tmp_cell->get_dof_indices(tmp_local_dof_indices);
+						     
+		           for (unsigned int j = 0; j < tmp_local_dof_indices.size(); ++j) {
+			        dealii::types::global_dof_index col_global_index = tmp_local_dof_indices[i];
+			        cell_contributions(cell_index,neighbor_index)+=dense_matrix(row_global_index,col_global_index);
+			
+	         	       }
+			    }
+				///////////////////////////////////////////////////////////////////////////////////
+			}
+	}
+
+
+         inv_dense_matrix=cell_contributions.inverse();
+        // std::cout<<inv_dense_matrix<<std::endl;
 
          Eigen::MatrixXd solver_vector(solid_3d.solution_n.size(),1);
          Eigen::VectorXd obj_det(solid_3d.solution_n.size());
-
+         //std::cout<<"___________________vertex in one cell:"<<solid_3d.fe.n_dofs_per_vertex()<<"__________________"<<std::endl; 
 
          double norm2_value;
 
           for (unsigned int i = 0; i < solid_3d.solution_n.size(); ++i) {
              solver_vector(i) = solid_3d.solution_n[i];
-             //fx[i]=solid_3d.solution_n[i];
-             //obj_det(i)= solid_3d.solution_n[i];
+            
              norm2_value+=std::pow(solid_3d.solution_n[i],2);
          }
 
-      //   norm2_value=std::sqrt(norm2_value);
-	// f0x[0]=norm2_value;
-////////////////////////////////////////////
+
 
 
           Eigen::VectorXd cell_gradients_solid(solid_3d.triangulation.n_active_cells());
@@ -2983,7 +2939,7 @@ struct Problem {
                 std::vector<dealii::types::global_dof_index> local_dof_indices(solid_3d.dofs_per_cell) ;
 
                 cell->get_dof_indices(local_dof_indices);
-        // 创建用于存储单元梯度的向量
+       
        // Eigen::VectorXd gradient(Eigen::VectorXd::Zero(local_dof_indices.size()));
         //std::cout<<"*****************************************"<<std::endl;
              for (unsigned int i = 0; i < local_dof_indices.size(); ++i) {
@@ -3009,9 +2965,40 @@ struct Problem {
            }
          }
 
-      /////////////////////////////////////////
-        std::cout<<cell_gradients_solid<<std::endl;
+      
+
+   }
+
+
+
+	void ObjSens(Cook_Membrane::Solid<dim,NumberType> &solid_3d,Cook_Membrane::Parameters::AllParameters &parameters,double *x, double *f0x, double *fx, double *df0dx, double *dfdx) {
+		Obj(solid_3d,parameters,x, f0x, fx);
+
+              
+	       Eigen::MatrixXd solver_vector(n,1);
+               Eigen::VectorXd obj_det(n);       
 	
+		for(int i=0;i<solid_3d.triangulation.n_active_cells();i++){
+                
+                   df0dx[i]=2*fx[i];
+                   obj_det(i)=2*fx[i];
+		   solver_vector(i)=fx[i];
+
+
+	       }
+
+              std::cout<<inv_dense_matrix<<std::endl;
+              Eigen::VectorXd solver_gradient=-1*(obj_det).transpose()*inv_dense_matrix*solver_vector*solver_vector.transpose();
+
+	      for(int i=0;i<solid_3d.triangulation.n_active_cells();i++){
+                  
+                     dfdx[i]=solver_gradient(i);
+
+               }
+
+               
+
+
 	}
 
 
@@ -3203,20 +3190,23 @@ int main (int argc, char *argv[])
     Problem toy(parameters,mu_vec,solid_3d);
 
 
-  double movlim = 0.2;
+double movlim = 0.2;
   double f, fnew;
   std::vector<double> df(toy.n);
   std::vector<double> g(toy.m), gnew(toy.m);
   std::vector<double> dg(toy.n * toy.m);
+  std::vector<double> dg_prime(toy.n);
   std::vector<double> x = toy.x0;
   std::vector<double> xold = x;
   std::vector<double> xnew(toy.n);
 
-
-
-  toy.Obj(solid_3d,parameters,x.data(),&f,g.data());
- 
+ // toy.Obj(solid_3d,parameters,x.data(),&f,g.data());
+  toy.ObjSens(solid_3d,parameters,x.data(), &f, g.data(), df.data(),dg_prime.data());
   std::cout<<"f is :"<<f<<std::endl;
+
+  std::cout<<g.size()<<std::endl;
+  std::cout<<dg.size()<<std::endl;
+  std::cout<<dg_prime.size()<<std::endl;
 
 
         }
