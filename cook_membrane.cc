@@ -3042,23 +3042,13 @@ struct Problem {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+void print(double *x, int n, const std::string &name = "x") {
+        std::cout << name << ":";
+        for (int i=0;i<n;i++) {
+                std::cout << " " << x[i];
+        }
+        std::cout << std::endl;
+}
 
 
 
