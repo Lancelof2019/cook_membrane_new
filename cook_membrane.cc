@@ -3209,6 +3209,69 @@ double movlim = 0.2;
   std::cout<<dg_prime.size()<<std::endl;
 
 
+////////////////////////////
+
+
+GCMMASolver gcmma(toy.n, toy.m, 0, 1000, 1);
+        MMASolver mma(toy.n, toy.m, 0, 1000, 1);
+
+        double ch = 1.0;
+        int maxoutit = 8;
+        for (int iter = 0; ch > 0.0002 && iter < maxoutit; ++iter) {
+                toy.ObjSens(solid_3d,parameters,x.data(), &f, g.data(), df.data(), dg.data());
+
+                // Call the update method
+                if (0) {
+                        // MMA version
+                        mma.Update(x.data(), df.data(), g.data(), dg.data(),
+                                toy.xmin.data(), toy.xmax.data());
+                } else {
+                        // GCMMA version
+                        gcmma.OuterUpdate(xnew.data(), x.data(), f, df.data(),
+                                g.data(), dg.data(), toy.xmin.data(), toy.xmax.data());
+
+                        // Check conservativity
+                        toy.Obj(solid_3d,parameters,xnew.data(), &fnew, gnew.data());
+                        bool conserv = gcmma.ConCheck(fnew, gnew.data());
+                        //std::cout << conserv << std::endl;
+                        for (int inneriter = 0; !conserv && inneriter < 15; ++inneriter) {
+                                // Inner iteration update
+                                gcmma.InnerUpdate(xnew.data(), fnew, gnew.data(), x.data(), f,
+                                        df.data(), g.data(), dg.data(), toy.xmin.data(), toy.xmax.data());
+
+                                // Check conservativity
+                                toy.Obj(solid_3d,parameters,xnew.data(), &fnew, gnew.data());
+                                conserv = gcmma.ConCheck(fnew, gnew.data());
+                                //std::cout << conserv << std::endl;
+                        }
+                        x = xnew;
+                }
+
+                // Compute infnorm on design change
+                ch = 0.0;
+                for (int i=0; i < toy.n; ++i) {
+                        ch = std::max(ch, std::abs(x[i] - xold[i]));
+                        xold[i] = x[i];
+                }
+
+                // Print to screen
+                printf("it.: %d, obj.: %f, ch.: %f \n", iter, f, ch);
+                print(x.data(), toy.n);
+                toy.Obj(solid_3d,parameters,x.data(), &f, g.data());
+                std::cout << "f: " << f << std::endl;
+                print(g.data(), toy.m, "g");
+                std::cout << std::endl;
+        }
+
+
+
+
+
+///////////////////////////
+
+
+		
+
         }
     }
   catch (std::exception &exc)
